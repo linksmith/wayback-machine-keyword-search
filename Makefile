@@ -14,14 +14,12 @@ help:
 	@echo "       print this help message"
 
 lint:
-	poetry run flake8 src
-	poetry run mypy src
-	poetry run mypy hypertune.py
+	poetry run flake8 app
+	poetry run mypy app
 
 format:
-	poetry run isort -v src
-	poetry run black src
-	poetry run black hypertune.py
+	poetry run isort -v app
+	poetry run black app
 
 meilisearch:
 	./meilisearch --master-key=masterKey

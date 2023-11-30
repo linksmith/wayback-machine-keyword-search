@@ -47,8 +47,14 @@ bayesian-optimization= "1.4.3"
 tensorboard = "^2.15.1"
 torch-tb-profiler = "^0.4.3"
 meilisearch = "^0.28.4"
-streamlit = "^1.28.2"
 streamlit-searchbox = "^0.1.6"
+beautifulsoup4 = "^4.12.2"
+requests = "^2.31.0"
+six = "^1.16.0"
+pdfplumber = "^0.10.3"
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.27.1"
 
 [tool.mypy]
 ignore_missing_imports = true

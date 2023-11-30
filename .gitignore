@@ -33,10 +33,6 @@ data/*
 .lycheecache
 **/*.log
 
-#meilisearch
-data/
-.env/
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -126,4 +122,7 @@ target/
 
 # Mypy cache
 .mypy_cache/
+
 /meilisearch
+data/
+.env/
