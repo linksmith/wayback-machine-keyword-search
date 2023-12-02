@@ -5,6 +5,7 @@ from streamlit_searchbox import st_searchbox
 from typing import Any, List
 from pathlib import Path
 from bs4 import BeautifulSoup
+from datetime import datetime
 
 st.title('Wayback Machine Keyword Search')
 
@@ -73,6 +74,7 @@ def add_documents_to_index(index, documents, primary_key, batch_size=50):
     progress_bar = st.progress(0)
     for i in range(0, len(documents), batch_size):
         batch = documents[i:i+batch_size]
+        index.add_documents()
         response = index.add_documents(batch, primary_key)
         print(response)
         progress = (i + len(batch)) / len(documents)
@@ -145,26 +147,79 @@ def main(jsonl_file_path, meilisearch_host, index_name, primary_ke=None, meilise
 
 jsonl_file_path = 'data/external/dataset_expired-article-hunter_2023-11-27_15-03-44-819.jsonl'
 meilisearch_host = 'http://127.0.0.1:7700'  # Replace with your Meilisearch host
-index_name = 'club-of-rome' 
+index_name = 'club-of-budapest-4' 
 meilisearch_api_key = 'masterKey'
 primary_key = None
 
-if st.button('Run index'):
-    main(jsonl_file_path, meilisearch_host, index_name, primary_key, meilisearch_api_key)
 
-if st.button('Delete all indexes'):
-    client = initialize_meilisearch(meilisearch_host, meilisearch_api_key)
-    delete_all_indexes(client)
+# Initialize MeiliSearch Client
+client = Client(meilisearch_host,meilisearch_api_key)  # Replace with your MeiliSearch URL and API key
+index = client.index(index_name)  # Replace with your index name
+index.update_filterable_attributes([
+  'timestamp'
+])
+# Search box
+query = st.text_input("Enter your search query")
 
-if st.button('Get task status'):
-    client = initialize_meilisearch(meilisearch_host, meilisearch_api_key)
-    index = create_or_get_index(client, index_name, primary_key)
-    tasks = index.get_tasks()
-    for task_results in tasks.results:
-        print(task_results)
+# if st.button('Run index'):
+#     main(jsonl_file_path, meilisearch_host, index_name, primary_key, meilisearch_api_key)
 
-# pass search function to searchbox
-selected_value = st_searchbox(
-    search_function=search_websites,
-    key="searchbox",
+# if st.button('Delete all indexes'):
+#     client = initialize_meilisearch(meilisearch_host, meilisearch_api_key)
+#     delete_all_indexes(client)
+
+# Slider for filtering (assuming the field is named 'price')
+today = datetime.today()
+
+min_date, max_date = st.slider(
+    "Select a date range",
+    value=(datetime(1990, 1, 1), datetime(today.year, today.month, today.day)),
+    format="YYYY-MM-DD"
 )
+
+if query:
+    # Format dates for filtering
+    min_date_str = min_date.strftime('%Y%m%d%H%M%S')
+    max_date_str = max_date.strftime('%Y%m%d%H%M%S')
+
+    # Conduct search with filters
+    search_params = {
+        'filter': f'timestamp >= {min_date_str} AND timestamp <= {max_date_str}',
+        'attributesToHighlight': ['text'],
+    }
+    results = index.search(query, search_params)
+    
+    # add subtitle for search results
+    st.markdown(f"### Found {results['estimatedTotalHits']} results for '{query}'")
+
+    # Display results
+    for result in results['hits']:
+        if 'title' in result:
+            st.markdown(f"### {result['title']}")
+        
+        st.markdown(f"[{result['wayback_machine_url']}]({result['wayback_machine_url']})")
+        # st.markdown(f"**Timestamp:** {result['timestamp']}")
+        # result['timestamp'] is an int and has format  %Y%m%d%H%M%S 
+        # formet this value to human readable
+        timestamp = datetime.strptime(str(result['timestamp']), '%Y%m%d%H%M%S')
+        st.markdown(f"**Snapshot:** {timestamp}")
+        
+        # Get the highlighted text
+        highlighted_text = result['_formatted']['text']
+
+        # Replace <em> and </em> with their HTML entity equivalents
+        highlighted_text = highlighted_text.replace('<em>', '**[').replace('</em>', ']**')
+
+        # Find the position of the highlighted text
+        start_pos = highlighted_text.find('**[')
+        end_pos = highlighted_text.find(']**')
+
+        # Get a snippet of 100 chars surrounding the highlighted text
+        snippet_start = max(0, start_pos - 100)
+        snippet_end = min(len(highlighted_text), end_pos + 100)
+        snippet = highlighted_text[snippet_start:snippet_end]
+
+        st.markdown(f"**Text:** {snippet}")
+
+        
+        
