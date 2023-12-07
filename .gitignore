@@ -126,3 +126,5 @@ target/
 /meilisearch
 data/
 .env/
+
+.streamlit/secrets.toml
