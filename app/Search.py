@@ -1,4 +1,3 @@
-import streamlit as st
 import pandas as pd
 from meilisearch import Client
 from streamlit_searchbox import st_searchbox
@@ -6,23 +5,15 @@ from typing import Any, List
 from pathlib import Path
 from bs4 import BeautifulSoup
 from datetime import datetime
+from pages.backend.functions import get_index, create_table
 
 def main():
     st.set_page_config(page_title="Search - Wayback Machine Keyword Search", page_icon=":mag:", layout="centered")
     st.markdown("""<style>p { margin: 0; } h1 { color: rgb(255 120 165) } h5 a { margin: 0.1rem 0; color: rgb(228, 19, 89) !important; text-decoration: none } hr { margin: 1em 0px; } .st-emotion-cache-5rimss a { color: rgb(96, 108, 139) } .stMarkdown { color: rgb(96, 108, 139) } .stMarkdown strong { color: black; }""", unsafe_allow_html=True)
 
-    st.markdown('''# Search''')
+    st.markdown('''# Search''')   
 
-    # Initialize MeiliSearch Client
-    client = Client(
-        st.secrets.meilisearch.host, 
-        st.secrets.meilisearch.api_key
-    )  # Replace with your MeiliSearch URL and API key
-    index = client.index(st.secrets.meilisearch.index_name)  # Replace with your index name
-    index.update_filterable_attributes([
-        'unix_timestamp',
-        'domain',
-    ])
+    create_table()
 
     # Search box
     query = st.text_input("Enter your search query")
@@ -96,8 +87,7 @@ def main():
             else:
                 search_params['filter'] = date_filter_str
 
-        # st.json(search_params)
-
+        index = get_index()
         results = index.search(query, search_params)
         
         # add subtitle for search results
