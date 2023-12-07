@@ -1,3 +1,4 @@
+import streamlit as st
 import pandas as pd
 from meilisearch import Client
 from streamlit_searchbox import st_searchbox
@@ -11,9 +12,9 @@ def main():
     st.set_page_config(page_title="Search - Wayback Machine Keyword Search", page_icon=":mag:", layout="centered")
     st.markdown("""<style>p { margin: 0; } h1 { color: rgb(255 120 165) } h5 a { margin: 0.1rem 0; color: rgb(228, 19, 89) !important; text-decoration: none } hr { margin: 1em 0px; } .st-emotion-cache-5rimss a { color: rgb(96, 108, 139) } .stMarkdown { color: rgb(96, 108, 139) } .stMarkdown strong { color: black; }""", unsafe_allow_html=True)
 
-    st.markdown('''# Search''')   
-
     create_table()
+
+    st.markdown('''# Search''')   
 
     # Search box
     query = st.text_input("Enter your search query")
