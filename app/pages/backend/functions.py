@@ -6,6 +6,15 @@ import pandas as pd
 from pages.backend.search import get_index, IndexConfig
 from pages.backend.search import rebuild_index as rebuild_search_index
 
+def get_config():
+    return IndexConfig(
+        host=st.secrets.meilisearch.host, 
+        api_key=st.secrets.meilisearch.api_key,
+        index_name=st.secrets.meilisearch.index_name,
+        proxy_http=st.secrets.proxy.http,
+        proxy_https=st.secrets.proxy.https
+    )
+
 def create_domains_dataframe(domain_names):       
     return pd.DataFrame(domain_names)
 
@@ -59,27 +68,15 @@ def rebuild_index(rebuilding_index_progress):
         st.error('No domains provided.')
         return
 
-    config = IndexConfig(
-        host=st.secrets.meilisearch.host, 
-        api_key=st.secrets.meilisearch.api_key,
-        index_name=st.secrets.meilisearch.index_name,
-        proxy_http=st.secrets.proxy.http,
-        proxy_https=st.secrets.proxy.https
-    )
-
     return rebuild_search_index(
-        domain_names=domain_names_list, 
-        config=config, 
+        # domain_names=[
+        #     "clubofbudapest.hu"
+        # ], 
+        domain_names=domain_names_list,
+        config=get_config(), 
         rebuilding_index_progress=rebuilding_index_progress
     )
 
-def get_index():
-    config = IndexConfig(
-        host=st.secrets.meilisearch.host, 
-        api_key=st.secrets.meilisearch.api_key,
-        index_name=st.secrets.meilisearch.index_name,
-        proxy_http=st.secrets.proxy.http,
-        proxy_https=st.secrets.proxy.https
-    )
-
-    return get_index(config)
+def search(query, search_params):
+    index = get_index(config=get_config())
+    return index.search(query, search_params)

@@ -13,6 +13,7 @@ from typing import Dict, List, Optional, Any, Tuple
 import json
 from io import BytesIO
 import streamlit as st
+import uuid
 
 class IndexConfig(BaseModel):
     host: str
@@ -38,7 +39,7 @@ class DomainPages(BaseModel):
     pages: List[Page]
 
 class PageContent(BaseModel):
-    id: Optional[int]
+    id: str
     title: str
     domain: str
     timestamp: str
@@ -55,10 +56,21 @@ class DomainPagesContent(BaseModel):
 df = None
 all_domains_pages_df = None
 
-def fetch_pages(domain: str, proxy) -> Tuple[str, Optional[bytes]]:
+def fetch_pages(domain: str, proxy) -> DomainPages:
     url = f'https://web.archive.org/cdx/search/cdx?url={domain}&output=json&collapse=digest&matchType=domain&fl=timestamp,original,mimetype,statuscode,digest,length&filter=statuscode:200&filter=mimetype:text/html|application/pdf'
-    response = proxy.open(url)
-    return domain, response
+    
+    try:
+        response = proxy.open(url)     
+
+        if response.status == 200: 
+            response_json = json.load(response)
+            pages = convert_json_to_page(response_json)
+            return DomainPages(domain=domain, pages=pages)
+    except Exception as error:
+        print(f"Error fetching {url}", error)  
+        return None
+
+    return None
 
 def convert_json_to_page(json_data: List[List[str]]) -> List[Page]:
     pages = []
@@ -87,16 +99,10 @@ def fetch_all_domain_pages(domain_names: List, proxy) -> List[DomainPages]:
             futures.append(future)
             
         for future in concurrent.futures.as_completed(futures):
-            domain, response = future.result()
+            domain_pages = future.result()
             
-            if response is None:
-                continue
-
-            response_json = json.load(response)
-            pages = convert_json_to_page(response_json)
-            domain_pages = DomainPages(domain=domain, pages=pages)
-
-            all_domain_pages.append(domain_pages)
+            if domain_pages:
+                all_domain_pages.append(domain_pages)
 
     # reorder all_domain_pages by pages length from smallest to largest
     all_domain_pages = sorted(all_domain_pages, key=lambda x: len(x.pages))
@@ -150,10 +156,24 @@ def fetch_pdf_content_on_the_fly(content, url):
     return BaseContent(text=pdf_content, title=pdf_title)
 
 def fetch_html_content(original_content: bytes) -> Optional[BaseContent]:
-    soup = BeautifulSoup(original_content, 'html.parser')
-    text = soup.get_text()
-    text = text.replace('\n', ' ').replace(' +', ' ')
-    title = soup.title.string if soup.title else ''
+    try:
+        soup = BeautifulSoup(original_content, 'html.parser')
+        text = soup.get_text()
+        # remove all newlines
+        text = text.replace('\n', ' ')
+        # remove all spaces at the beginning and end of the string
+        text = text.strip()
+        # remove all spaces longer than 1 in an efficient way
+        text = ' '.join(text.split())
+        # fix any encoding issues
+        text = text.encode('ascii', 'ignore').decode('utf-8')
+
+        title = soup.title.string if soup.title else ''
+        # fix any encoding issues
+        title = title.encode('ascii', 'ignore').decode('utf-8')
+    except Exception as error:
+        print(f"Error fetching HTML content", error)  
+        return None
 
     return BaseContent(text=text, title=title)
 
@@ -162,8 +182,10 @@ def fetch_content(wayback_machine_url: str, proxy) -> Optional[bytes]:
         response = proxy.open(wayback_machine_url)
         if response.status == 200:
             return response.read()
-    except:
+    except Exception as error:
+        print(f"Error fetching {wayback_machine_url}", error)  
         return None
+
     return None
    
 def process_page(page: Page, domain: str, proxy) -> Optional[PageContent]:
@@ -197,6 +219,7 @@ def process_page(page: Page, domain: str, proxy) -> Optional[PageContent]:
     unix_timestamp = int(pd.to_datetime(page.timestamp).timestamp())
 
     return PageContent(
+        id=str(uuid.uuid4()),
         title=content.title,
         domain=domain,
         timestamp=page.timestamp,
@@ -224,7 +247,7 @@ def fetch_domain_pages_content(all_domain_pages: List[DomainPages], proxy, rebui
                 total_domain_futures = len(futures)
                 for i, future in enumerate(concurrent.futures.as_completed(futures)):
                     result = future.result()
-                    if result is not None:
+                    if result:
                         domain_pages_content.pages_contents.append(result)
                     rebuilding_index_progress.progress((i + 1) / total_domain_futures, text=f"Fetching content for domain '{domain_pages.domain}'...")
   
@@ -237,7 +260,7 @@ def fetch_domain_pages_content(all_domain_pages: List[DomainPages], proxy, rebui
             total_domain_pages = len(domain_pages.pages)
             for i, page in enumerate(domain_pages.pages):
                 result = process_page(page, domain_pages.domain)
-                if result is not None:
+                if result:
                     domain_pages_content.pages_contents.append(result)
                 rebuilding_index_progress.progress((i + 1) / total_domain_pages, text=f"Fetching content for domain '{domain_pages.domain}'...")
 
@@ -261,17 +284,14 @@ def create_index(all_domain_pages_content: List[DomainPagesContent], config: Ind
     for domain_pages_content in all_domain_pages_content:
         print(f"Adding {len(domain_pages_content.pages_contents)} pages from domain '{domain_pages_content.domain}' to Meilisearch index...")
         total_pages += len(domain_pages_content.pages_contents)
-        all_pages_content.extend(domain_pages_content.pages_contents)
 
-    # update all_pages_content and set id as index starting with 1
-    for i, page_content in enumerate(all_pages_content):
-        page_content.id = i + 1
-                
-    # convert all_pages_content to dictoionary
-    all_pages_content_dict = [page_content.dict() for page_content in all_pages_content]
+        domain_pages_content_dicts = [page_content.dict() for page_content in domain_pages_content.pages_contents]
 
-    # add all_pages_content_dict to Meilisearch index
-    index.add_documents(all_pages_content_dict)
+        try:            
+            index.add_documents_in_batches(domain_pages_content_dicts, batch_size=10)
+        except Exception as error:
+            print(f"Error adding pages from domain '{domain_pages_content.domain}' to Meilisearch index.", error)    
+            continue
 
     print(f"Total pages added to Meilisearch index: {total_pages}.")
 
