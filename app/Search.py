@@ -71,10 +71,13 @@ def main():
         search_params = {
             # 'filter': f'timestamp >= {min_date_timestamp} AND timestamp < {max_date_timestamp}',
             'attributesToHighlight': ['text'],
-            'highlightPreTag': "**[",
-            'highlightPostTag': "]**",
+            'attributesToCrop': ['text'],
+            'cropLength': 36,
+            'highlightPreTag': "**",
+            'highlightPostTag': "**",
             'limit': 10,
             'offset': st.session_state.offset,
+            # 'showRankingScore': True
         }
         
         if use_domain_filter and len(domain_filter) > 0:
@@ -104,28 +107,17 @@ def main():
 
         # Display results
         for result in results['hits']:
+            # print(result['_rankingScore'])
             st.markdown(f"{result['domain']}")
-            st.markdown(f"##### [{result['title']}]({result['wayback_machine_url']})")
+            # strip everything but letters, spaces and dashed from title
+            title = ''.join(e for e in result['title'] if e.isalnum() or e == ' ' or e == '-')
             
-            # human readable timestamp with only date
+            st.markdown(f"##### [{title}]({result['wayback_machine_url']})")
+            
             timestamp = datetime.fromtimestamp(result['unix_timestamp']).strftime('%Y-%m-%d')
-        
-            # Get the highlighted text
             highlighted_text = result['_formatted']['text']
 
-            # # Replace <em> and </em> with their HTML entity equivalents
-            # highlighted_text = highlighted_text.replace('<em>', '**').replace('</em>', '**')
-
-            # # Find the position of the highlighted text
-            start_pos = highlighted_text.find('**[')
-            end_pos = highlighted_text.find(']**')
-
-            # Get a snippet of 100 chars surrounding the highlighted text
-            snippet_start = max(0, start_pos - 150)
-            snippet_end = min(len(highlighted_text), end_pos + 150)
-            snippet = highlighted_text[snippet_start:snippet_end]
-
-            st.markdown(f"*{timestamp}* - {snippet}")
+            st.markdown(f"*{timestamp}* - {highlighted_text}")
 
             st.markdown('---')
 
